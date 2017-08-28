@@ -9,14 +9,14 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Collections.Concurrent;
+using LifxMvc.Domain;
 
 namespace LifxMvc.Services.UdpHelper
 {
 	public class BulbUdpHelper : IDisposable
 	{
 		const int MAX_TX_PER_SECOND = 1000 / 10;
-		const int MAX_RETRIES = 3;
-        const int LOCK_TIMEOUT_10_SECOND = 10000;
+        const int LOCK_TIMEOUT = 8000;
         private IAsyncResult _currentAsyncResult;
         private readonly object _objLock = new object();
 
@@ -45,17 +45,27 @@ namespace LifxMvc.Services.UdpHelper
 		{
 			this.StopListeningEvent = new ManualResetEventSlim(false);
 			this.IsAvailableEvent = new ManualResetEventSlim(true);
-			this.UdpClient = this.CreateUdpClient(ep);
+			//CreateUdpClient(ep);
             EndPoint = ep;
 		}
 
-		UdpClient CreateUdpClient(IPEndPoint ep)
+		private void CreateUdpClient(IPEndPoint ep)
 		{
-			var client = new UdpClient(ep.Address.ToString(), ep.Port);
+            try
+            {
+                UdpClient.Close();
+            }
+            catch(Exception e)
+            {
+                // do nothing
+            }
 
-            client.DontFragment = true;
 
-			return client;
+            UdpClient = new UdpClient(ep.Address.ToString(), ep.Port);
+
+            UdpClient.DontFragment = true;
+
+			//return client;
 		}
 
 		public void SendAsync(LifxPacketBase packet)
@@ -74,7 +84,7 @@ namespace LifxMvc.Services.UdpHelper
 		}
 
         ConcurrentBag<Task> BulbRequestDataTask { get; set; }
-        public R Send<R>(LifxPacketBase<R> packet, int retry_count = 0, int timeout = 500)
+        public R Send<R>(LifxPacketBase<R> packet, IBulb bulb)
             where R : LifxResponseBase
         {
 
@@ -85,45 +95,56 @@ namespace LifxMvc.Services.UdpHelper
 
             try
             {
-                enteredLock = Monitor.TryEnter(_objLock, LOCK_TIMEOUT_10_SECOND);
+                int retries = 3;
+                int timeout = 500;
+                enteredLock = Monitor.TryEnter(_objLock, LOCK_TIMEOUT);
 
                 if (enteredLock)
-                {   
-                    // Start the 'GetResponse' method in a Task thread (this starts the response lisenter
-                    //  before we send the packet)
-                    var action = new Action(() => response = GetResponse(packet.Header.Source, timeout));
-                    var task = Task.Factory.StartNew(action);
+                {
+                    // If bulb is Offline, then just return
+                    if (bulb.isOffline)
+                        return result;
 
-                    // Send the data packet to the bulb
-                    byte[] data = this.SendImpl(packet);
+                    while (result == null && retries >= 0)
+                    {
+                        CreateUdpClient(EndPoint);
 
-                    // wait for the response from the bulb to be read before continuing
-                    Task.WaitAll(task);
+                        // Start the 'GetResponse' method in a Task thread (this starts the response lisenter
+                        //  before we send the packet)
+                        var action = new Action(() => response = GetResponse(packet.Header.Source, timeout));
+                        var task = Task.Factory.StartNew(action);
 
-                    this.UdpClient.Close();// Dispose();
-                    this.UdpClient = this.CreateUdpClient(EndPoint);
+                        // Send the data packet to the bulb
+                        byte[] data = this.SendImpl(packet);
+
+                        // wait for the response from the bulb to be read before continuing
+                        Task.WaitAll(task);
+
+                        // double the timeout length during the next retry
+                        timeout = timeout * 2;
+                        retries--;
+                        packet.Header.Source += 100;
+
+                        if (response is R)
+                        {
+                            result = response as R;
+                        }
+                    }
+
+                    // Set offline flag based on result data
+                    bulb.isOffline = (result == null);
                 }
+            }
+            catch(Exception e)
+            {
+                if (enteredLock)
+                    Monitor.Exit(_objLock);
             }
             finally
             {
                 if (enteredLock)
                     Monitor.Exit(_objLock);
-            }
-
-            if (response is R)
-            {
-                result = response as R;
-            }
-            else
-            {
-                // If the response is NULL, then retry sending the data again and increase
-                // the listener wait timeout.
-                if (MAX_RETRIES > retry_count)
-                {
-                    packet.Header.Source += 100;
-                    result = this.Send(packet, ++retry_count, (timeout * 2));
-                }
-            }
+            }            
 
             return result;
         }
@@ -205,15 +226,28 @@ namespace LifxMvc.Services.UdpHelper
                         else
                         {
                             Debug.WriteLine("{0}{1}", DateTime.Now.ToString("HH:mm:ss.ffff"), " --- UDP BeginReceive and EndReceive don't match up.");
+                            Console.WriteLine("{0}{1}", DateTime.Now.ToString("HH:mm:ss.ffff"), " --- UDP BeginReceive and EndReceive don't match up.");
                             break;
                         }
                     }
                     else
                     {
                         // We've timed out.
+                        Debug.WriteLine("Waiting for Response timed out.");
                         break;
                     }
+
+                    if (responseSource < frameSource)
+                    {
+                        Console.WriteLine("Response source doesn't match. Response:{0}  --  Request:{1}", responseSequence, frameSource);
+                    }
                 }
+
+                if (responseSource > frameSource)
+                {
+                    Console.WriteLine("Response source doesn't match. Response:{0}  --  Request:{1}", responseSequence, frameSource);
+                }
+
             }
             catch (Exception e)
             {

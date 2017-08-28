@@ -18,7 +18,7 @@ namespace LifxMvc.Services.UdpHelper
 	public class DiscoveryUdpHelper : IDisposable
 	{
         private const int PORT_NO = 56700; // LIFX Communication port
-        private const int SERVICE_PORT_NO = 56701; // Our discovery port
+        private const int SERVICE_PORT_NO = 0; // Our discovery port
         public static IPAddress LocalEndpointIpAddress = IPAddress.Any;
 
         const int LISTEN_DICOVERY_TIMEOUT = 15000; // 15 seconds
@@ -29,7 +29,7 @@ namespace LifxMvc.Services.UdpHelper
 
         private UdpClient discoverySocket = null;
 
-        private ConcurrentDictionary<string, int> discoveredBulbList = new ConcurrentDictionary<string, int>();
+        //private ConcurrentDictionary<string, int> discoveredBulbList = new ConcurrentDictionary<string, int>();
 
         DiscoveryService DiscoverySvc = null;
 
@@ -47,6 +47,12 @@ namespace LifxMvc.Services.UdpHelper
 		}
         //--------------------------------------------------------------------
 
+        public void SetLocalEndPoint(IPAddress localIP)
+        {
+            LocalEndpointIpAddress = localIP;
+        }
+        //--------------------------------------------------------------------
+
         private void CreateUdpClient()
         {
             discoverySocket = new UdpClient();
@@ -54,7 +60,6 @@ namespace LifxMvc.Services.UdpHelper
             discoverySocket.DontFragment = true;
             discoverySocket.EnableBroadcast = true;
 
-            //sender.ExclusiveAddressUse = false;
             discoverySocket.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
             discoverySocket.Client.Bind(new IPEndPoint(LocalEndpointIpAddress, SERVICE_PORT_NO));            
         }
@@ -66,20 +71,13 @@ namespace LifxMvc.Services.UdpHelper
             //discoverySocket.Dispose();
         }
         //--------------------------------------------------------------------
-        
+
         public DiscoveryUdpHelper()
 		{
 			this.Logger = new DebugLogger();
 		}
         //--------------------------------------------------------------------
-
-        public void RemoveFromDiscoveredBulbList(string endPoint)
-        {
-            int value;
-            discoveredBulbList.TryRemove(endPoint, out value);
-        }
-        //--------------------------------------------------------------------
-
+        
         public void StopDiscoveringBulbs()
         {
             KEEP_LISTENING = false;
@@ -138,7 +136,7 @@ namespace LifxMvc.Services.UdpHelper
             while (KEEP_LISTENING)
             {
                 try
-                {
+                {                    
                     var asyncResult = discoverySocket.BeginReceive(null, null);
                     var signaled = asyncResult.AsyncWaitHandle.WaitOne(LISTEN_DICOVERY_TIMEOUT);
                     if (signaled)
@@ -155,27 +153,12 @@ namespace LifxMvc.Services.UdpHelper
                             if (response is DeviceStateServiceResponse && ((LifxNet.DeviceStateServiceResponse)(response)).Service == UDP_SERVICE_SUPPORTED)
                             {
                                 string endPoint = foundObject.Address.ToString();
-                                int value;
+                                
+                                // Bundle the response and sender info into a single package
+                                var ctx = new DiscoveryContext(foundObject, response as DeviceStateServiceResponse);
 
-                                // If we've already discovered the bulb, then skip it.
-                                if (!discoveredBulbList.TryGetValue(endPoint, out value))
-                                {
-                                    if (discoveredBulbList.TryAdd(endPoint, discoveredBulbList.Count))
-                                    {
-                                        // Display info so we know we got a response
-                                        Console.WriteLine("Received response from: {0}", endPoint);
-
-                                        // Bundle the response and sender info into a single package
-                                        var ctx = new DiscoveryContext(foundObject, response as DeviceStateServiceResponse);
-
-                                        // Fire off a thread to read the bulb properties
-                                        OnBulbDiscovered(ctx);
-                                    }
-                                }
-                                else
-                                {
-                                    Debug.WriteLine("Ignored {0} -- Already found", foundObject.Address.ToString(), null);
-                                }
+                                // Fire off a thread to read the bulb properties
+                                OnBulbDiscovered(ctx);
                             }
                             else
                             {
@@ -198,7 +181,13 @@ namespace LifxMvc.Services.UdpHelper
                 {
                     Debug.WriteLine(e.ToString());
                     Console.WriteLine("ERROR: {0}:{1}", MethodInfo.GetCurrentMethod(), e.Message);
-                    //StopDiscoveringBulbs();
+                    Console.WriteLine("Waiting 30 Seconds before trying to re-establish connection");
+                    System.Threading.Thread.Sleep(30000);
+
+                    // Re-establish the UDP connection.
+                    // It seems that the udp connections will stop receiving data after aperiod of time.
+                    CloseUdpClient();
+                    CreateUdpClient();
                 }
             }
 
@@ -219,8 +208,6 @@ namespace LifxMvc.Services.UdpHelper
             {
                 Debug.WriteLine(e.ToString());
                 Console.WriteLine("ERROR: {0}:{1}", MethodInfo.GetCurrentMethod(), e.Message);
-                //StopDiscoveringBulbs();
-                //throw e;
             }
         }
         //--------------------------------------------------------------------

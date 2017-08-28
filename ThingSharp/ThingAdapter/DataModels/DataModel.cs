@@ -1,7 +1,7 @@
 using System;
 using ThingSharp.Types;
 
-namespace RestAdapter
+namespace SorisAdapter
 {
     public class LIFX_WIFI_LIGHT : Thing
     {

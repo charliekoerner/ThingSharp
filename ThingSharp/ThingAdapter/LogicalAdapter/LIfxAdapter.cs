@@ -7,7 +7,7 @@ using ThingSharp.Drivers;
 using ThingSharp.Server;
 using ThingSharp.Types;
 using ThingSharp.Utils;
-using RestAdapter;
+using SorisAdapter;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Diagnostics;
@@ -177,7 +177,10 @@ namespace ThingSharp.ThingSharp
             }
                 
             sw.Stop();
-            Console.WriteLine("GET:{0}\t -- TimeElapsed: {1}   ({2})  {3}", property.Name, sw.Elapsed, count++, driver.GetBulbObjectLabel(property.Parent.SubsystemContext));
+            string offline = "";
+            if (driver.IsBulbOffline(property.Parent.SubsystemContext))
+                offline = "--offline";
+            Console.WriteLine("GET:{0}\t -- TimeElapsed: {1}   ({2})  {3} {4}", property.Name, sw.Elapsed, count++, driver.GetBulbObjectLabel(property.Parent.SubsystemContext), offline);
 
             return value;
         }
@@ -220,8 +223,11 @@ namespace ThingSharp.ThingSharp
                     break;
             }
 
+            string offline = "";
+            if (driver.IsBulbOffline(property.Parent.SubsystemContext))
+                offline = "--offline";
             sw.Stop();
-            Console.WriteLine("PUT:{0}\t -- TimeElapsed: {1}", property.Name, sw.Elapsed);
+            Console.WriteLine("PUT:{0}\t -- TimeElapsed: {1}   ({2})  {3} {4}", property.Name, sw.Elapsed, count++, driver.GetBulbObjectLabel(property.Parent.SubsystemContext), offline);
 
             return returnStatus;
         }

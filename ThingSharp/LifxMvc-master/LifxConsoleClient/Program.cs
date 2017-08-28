@@ -19,14 +19,12 @@ namespace LifxConsoleClient
 
         static void Main(string[] args)
         {
-            //DiscoveryUdpHelper.LocalEndpointIpAddress = new IPAddress(new byte[] { 192, 168, 1, 123 });
-
             string ipString = instance.GetLocalIPv4(NetworkInterfaceType.Wireless80211);
             DiscoveryUdpHelper.LocalEndpointIpAddress = IPAddress.Parse(ipString);
 
             Console.WriteLine("EndPoint (automatic): " + ipString + ":8080");
-            
-            DiscoveryService disco = new DiscoveryService();
+
+            DiscoveryService disco = new DiscoveryService(IPAddress.Parse(ipString));
             BulbService bulbService = new BulbService();             
 
             // Tell the bulb discovery thread to start

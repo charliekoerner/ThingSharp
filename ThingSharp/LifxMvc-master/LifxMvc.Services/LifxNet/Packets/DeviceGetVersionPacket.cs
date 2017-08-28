@@ -15,6 +15,7 @@ namespace LifxNet
 			: base(bulb)
 		{
 			this.Header.ResponseRequired = true;
+            this.Header.AcknowledgeRequired = false;
 		}
 
 		public DeviceGetVersionPacket(FrameHeader header)

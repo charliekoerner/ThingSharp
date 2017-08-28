@@ -45,6 +45,7 @@ namespace ThingSharp.Bindings
             public Object error { get; set; }
         }
 
+        private long threadCount = 0;
         public void Listen()
         {
             if (!HttpListener.IsSupported)
@@ -66,11 +67,14 @@ namespace ThingSharp.Bindings
             }
             Console.WriteLine("Listening...");
             //System.Diagnostics.Trace.WriteLine("Listening...");
-            while (true)
+
+            listener.Start();
+
+            while (listener.IsListening)
             {
-                listener.Start();
-                if (!listener.IsListening)
-                    break;
+                //listener.Start();
+                //if (!listener.IsListening)
+                //    break;
 
                 try
                 {
@@ -79,6 +83,8 @@ namespace ThingSharp.Bindings
 
                     // Send the request off to the processing thread
                     HandleRequest(context);
+                    threadCount++;
+                    //Console.WriteLine("Thread Count: {0}", threadCount);
                 }
                 catch (Exception e)
                 {
@@ -98,6 +104,8 @@ namespace ThingSharp.Bindings
         private void HandleRequestAsync(HttpListenerContext context)
         {
             Stopwatch sw;
+
+            System.Threading.Thread.Sleep(100);
 
             // Start timing the amount of time it takes for each request
             sw = Stopwatch.StartNew();
@@ -119,6 +127,7 @@ namespace ThingSharp.Bindings
                         r = client.Read(request.Url);
                         if (r == null)
                         {
+                            //Console.WriteLine("--Resource Not Responding");
                             response.StatusCode = (int)HttpStatusCode.NotFound;
                             responseString = "{\"Resource\":\"Not Responding\"}";
                             buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
@@ -144,6 +153,7 @@ namespace ThingSharp.Bindings
                     }
                     catch (Exception e)
                     {
+                        //Console.WriteLine("--INTERNAL ERROR!");
                         response.StatusCode = (int)GetStatusCodeForException(e); ;
                         r = e.Message;
                     }
@@ -198,6 +208,8 @@ namespace ThingSharp.Bindings
 
             sw.Stop();
             //Console.WriteLine("RequestReceived -- Overall TimeElapsed: {0}", sw.Elapsed);
+
+            threadCount--;
 
         }
 

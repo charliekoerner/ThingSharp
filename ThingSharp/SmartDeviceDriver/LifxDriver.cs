@@ -18,9 +18,14 @@ namespace ThingSharp.Drivers
 
         public LifxDriver(IPAddress localEndpoint)
         {
-            DiscoveryUdpHelper.LocalEndpointIpAddress = localEndpoint;
-            mDiscoveryService = new DiscoveryService();
+            mDiscoveryService = new DiscoveryService(localEndpoint);
             mBulbService = new BulbService();
+        }
+
+        public bool IsBulbOffline(Object bulb)
+        {
+            IBulb b = (IBulb)bulb;
+            return b.isOffline;
         }
 
         //********************************************************************
@@ -102,14 +107,12 @@ namespace ThingSharp.Drivers
 
         public bool? GetBulbPower(Object bulb)
         {
-            IBulb b = (IBulb)bulb;
-            return mBulbService.LightGetPower(b);
+            return mBulbService.LightGetPower((IBulb)bulb);
         }
         //-------------------------------------------------------------
         public bool SetBulbPower(Object bulb, object state)
         {
-            IBulb b = (IBulb)bulb;
-            return mBulbService.LightSetPower(b, (bool)state);
+            return mBulbService.LightSetPower((IBulb)bulb, (bool)state);
         }
         //-------------------------------------------------------------
 
@@ -118,17 +121,22 @@ namespace ThingSharp.Drivers
         // Color - Get/Set
         //********************************************************************
 
-        public string GetBulbColor(Object bulb)
+        public String GetBulbColor(Object bulb)
         {
-            IBulb b = (IBulb)bulb;
-            return String.Format("#{0}", mBulbService.LightGetColor(b));
+            String color = mBulbService.LightGetColor((IBulb)bulb);
+
+            if(color != null)
+            {
+                color = String.Format("#{0}", color);
+            }
+
+            return color;
         }
         //-------------------------------------------------------------
         public object SetBulbColor(Object bulb, object value)
         {
-            IBulb b = (IBulb)bulb;
             System.Drawing.Color color = ParseColor((string)value);
-            return mBulbService.LightSetColor(b, color);
+            return mBulbService.LightSetColor((IBulb)bulb, color);
         }
         //-------------------------------------------------------------
         System.Drawing.Color ParseColor(string color)
@@ -153,8 +161,7 @@ namespace ThingSharp.Drivers
 
         public ushort? GetBulbBrightness(Object bulb)
         {
-            IBulb b = (IBulb)bulb;
-            ushort? brightness = mBulbService.LightGetBrightness(b);
+            ushort? brightness = mBulbService.LightGetBrightness((IBulb)bulb);
 
             if (brightness != null)
             {
@@ -173,14 +180,12 @@ namespace ThingSharp.Drivers
             if (brightness < 0)
                 return false;
 
-            IBulb b = (IBulb)bulb;
-
             // convert from % to value in range of 0 to 65535
             brightness = brightness > (ushort)100 ? (ushort)100 : brightness;
             brightness = brightness < (ushort)0 ? (ushort)0 : brightness;
             brightness = (ushort)Math.Round(((float)brightness / 100.0) * 65535.0, 0);
 
-            return mBulbService.LightSetBrightness(b, brightness);
+            return mBulbService.LightSetBrightness((IBulb)bulb, brightness);
         }
         //-------------------------------------------------------------
 
@@ -191,8 +196,7 @@ namespace ThingSharp.Drivers
 
         public ushort? GetBulbSaturation(Object bulb)
         {
-            IBulb b = (IBulb)bulb;
-            ushort? saturation = mBulbService.LightGetSaturation(b);
+            ushort? saturation = mBulbService.LightGetSaturation((IBulb)bulb);
 
             if (saturation != null)
             {
@@ -211,14 +215,12 @@ namespace ThingSharp.Drivers
             if (saturation < 0)
                 return false;
 
-            IBulb b = (IBulb)bulb;
-
             // convert from % to value in range of 0 to 65535
             saturation = saturation > (ushort)100 ? (ushort)100 : saturation;
             saturation = saturation < (ushort)0 ? (ushort)0 : saturation;
             saturation = (ushort)Math.Round(((float)saturation / 100.0) * 65535.0, 0);
 
-            return mBulbService.LightSetSaturation(b, saturation);
+            return mBulbService.LightSetSaturation((IBulb)bulb, saturation);
         }
         //-------------------------------------------------------------
 
@@ -229,8 +231,7 @@ namespace ThingSharp.Drivers
 
         public ushort? GetBulbKelvin(Object bulb)
         {
-            IBulb b = (IBulb)bulb;
-            return mBulbService.LightGetKelvin(b);
+            return mBulbService.LightGetKelvin((IBulb)bulb);
         }
         //-------------------------------------------------------------
         public object SetBulbKelvin(Object bulb, object value)
@@ -241,13 +242,11 @@ namespace ThingSharp.Drivers
             if (kelvin < 0)
                 return false;
 
-            IBulb b = (IBulb)bulb;
-
             // convert from % to value in range of 0 to 65535
             kelvin = kelvin > (ushort)6500 ? (ushort)6500 : kelvin;
             kelvin = kelvin < (ushort)2700 ? (ushort)2700 : kelvin;
 
-            return mBulbService.LightSetKelvin(b, kelvin);
+            return mBulbService.LightSetKelvin((IBulb)bulb, kelvin);
         }
         //-------------------------------------------------------------
     }

@@ -10,7 +10,6 @@ namespace LifxMvc.Domain
         DateTime LastPowerRequest { get; set; }
 
         bool isOffline { get; set; }
-        DateTime LastOfflineCheck { get; set; }
 		
         string ColorString { get; }
 		IPEndPoint IPEndPoint { get; set; }

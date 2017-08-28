@@ -24,7 +24,6 @@ namespace LifxMvc.Services
 		//void LightSetColor(IBulb bulb, IHSBK hsbk);
         bool LightSetColor(IBulb bulb, Color color);
         bool LightSetPower(IBulb bulb, bool power);
-		void LightSetWaveform(IBulb bulb, LightSetWaveformCreationContext ctx);
 		void SetLabel(IBulb bulb, string label);
 	}
 }

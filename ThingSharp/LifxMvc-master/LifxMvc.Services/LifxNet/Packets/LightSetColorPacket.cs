@@ -41,6 +41,8 @@ namespace LifxNet
 			Brightness = BitConverter.ToUInt16(payload, 5);
 			Kelvin = BitConverter.ToUInt16(payload, 7);
 			Duration = BitConverter.ToUInt32(payload, 9);
+
+            this.Header.AcknowledgeRequired = true;
 		}
 
 

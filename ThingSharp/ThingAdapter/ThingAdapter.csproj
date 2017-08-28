@@ -50,6 +50,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DataModels\DataModel.cs" />
+    <Compile Include="DataModels\SMART_DEVICE_DATA_MODEL.cs" />
     <Compile Include="LogicalAdapter\LIfxAdapter.cs" />
     <Compile Include="LogicalAdapter\SmartDeviceAdapter.cs" />
     <Compile Include="Program.cs" />

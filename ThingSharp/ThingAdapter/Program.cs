@@ -187,7 +187,7 @@ namespace ThingSharp.ThingSharp
             _Server.Stop();
 
             // TEMPORARY CODE. Force service to stop quickly for debugging
-            Environment.Exit(0);
+            //Environment.Exit(0);
         }
         //--------------------------------------------------------------------
 
@@ -321,16 +321,16 @@ namespace ThingSharp.ThingSharp
         {
             string description = String.Format(
                 " DESCRIPTION:\n" +
-                "        {0} is a program that allows communication between the \n" +
+                "        The Adapter is a program that allows communication between the \n" +
                 "        Management Workstation and a Smart Device service. \n" +
-                "        {0} can be ran as either a command line program, or \n" +
-                "        installed to run as a service.\n", appName);
+                "        The Adapter can be ran as either a command line program, or \n" +
+                "        installed to run as a service.\n");
             string usage = String.Format(
                 " USAGE:\n" +
-                "        {0} -[command] -<option1> -<option2>\n\n" +
+                "        <AdapterName>.exe -[command] -<option1> -<option2>\n\n" +
                 "        NOTE: All commands and options need to start with a dash '-'\n\n" +
                 "        Commands:\n" +
-                "          service-------Installs and starts {0} as a service. If \n" +
+                "          service-------Installs and starts Adapter as a service. If \n" +
                 "                         already installed as a service, this command\n" +
                 "                         will update the service command line arguments.\n" +
                 "          uninstall-----Stops and Uninstalls the service.\n\n" +
@@ -343,12 +343,12 @@ namespace ThingSharp.ThingSharp
                 "                         the Management Workstation. If multiple adpaters are \n" +
                 "                         running on the same machine, each one needs a \n" +
                 "                         different port number.\n" +
-                "                         Default port is 8080.\n", appName);
+                "                         Default port is 8080.\n");
             string example = String.Format(
                 " EXAMPLE:\n" +
-                "        {0} -service -ip:192.168.1.123 -port:8085 \n\n" +
-                "        -- this example will install {0} as a service with the\n" +
-                "           entered IP and Port as command line arguments.\n", appName);
+                "        <AdapterName>.exe -service -ip:192.168.1.123 -port:8085 \n\n" +
+                "        -- this example will install the Adapter as a service with the\n" +
+                "           entered IP and Port as command line arguments.\n");
 
             Console.WriteLine(description);
             Console.WriteLine(usage);

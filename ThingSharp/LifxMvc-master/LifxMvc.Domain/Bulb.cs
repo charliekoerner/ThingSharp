@@ -111,7 +111,6 @@ namespace LifxMvc.Domain
         public DateTime LastStateRequest { get; set; }
         public DateTime LastPowerRequest { get; set; }
         
-        public DateTime LastOfflineCheck { get; set; }
         public bool isOffline 
         {
             get
@@ -130,7 +129,7 @@ namespace LifxMvc.Domain
                     //       the tries before setting the bulb to offline, then set the value
                     //       below to something greater than zero.
 
-                    if(_failed_response_count > 0)
+                    if(_failed_response_count > 1)
                     {
                         _isOffline = true;
                         IsOn = false;
@@ -205,7 +204,6 @@ namespace LifxMvc.Domain
             LastPowerRequest = DateTime.MaxValue;
 
             isOffline = false;
-            LastOfflineCheck = DateTime.MaxValue;
 
 		}        
 

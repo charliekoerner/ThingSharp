@@ -12,14 +12,16 @@ namespace LifxMvc.Services
 
     public class BulbLock
     {
-        const int LOCK_TIMEOUT_7_SECOND = 7000;
+        const int LOCK_TIMEOUT = 7000;
 
-        public bool Lock(Bulb b)
+        public bool Lock(IBulb b)
         {
-            return Monitor.TryEnter(b, LOCK_TIMEOUT_7_SECOND);    
+            DateTime startTime = DateTime.UtcNow; 
+            bool locked = Monitor.TryEnter(b, LOCK_TIMEOUT);             
+            return locked;  
         }
 
-        public void Unlock(Bulb b)
+        public void Unlock(IBulb b)
         {
             Monitor.Exit(b);
         }
@@ -28,42 +30,28 @@ namespace LifxMvc.Services
 
 	public class BulbService : IBulbService
 	{
-        const int BULB_OFFLINE_RETRY_TIME = 10000;
-        const int BULB_LAST_READ_RETRY_TIME = 1000;        
+        const int BULB_LAST_READ_RETRY_TIME = 15000;        
 
         private BulbLock _BulbLock = new BulbLock();
 
-		R Send<R>(IBulb bulb, LifxPacketBase<R> packet) where R : LifxResponseBase
-		{
+        R Send<R>(IBulb bulb, LifxPacketBase<R> packet) where R : LifxResponseBase
+        {
             var response = (R)null;
 
-            // If the bulb is Offline and we haven't waited BULB_OFFLINE_RETRY_TIME seconds yet, then 
-            // skip any communication with the bulb and send back a NULL response
-            if (BulbOfflineCheck(bulb))
-            {
-                var udp = UdpHelperManager.Instance[packet.IPEndPoint];
-                response = udp.Send(packet);
+            var udp = UdpHelperManager.Instance[packet.IPEndPoint];
+            response = udp.Send(packet, bulb);
 
-                if (null != response)
-                {
-                    bulb.isOffline = false;
+            if (null != response)
+            {            
+                // Don't update the bulb info if we sent a SET message because the response
+                // has the previous settings. For example, if we change brightness from 25%
+                // to 75%, the response will show brightness as 25%.
+                if (!IsSetPacket(packet.MessageType))
+                    BulbExtensions.Set(bulb, (dynamic)response);
+            }           
 
-                    // Don't update the bulb info if we sent a SET message because the response
-                    // has the previous settings. For example, if we change brightness from 25%
-                    // to 75%, the response will show brightness as 25%.
-                    if (!IsSetPacket(packet.MessageType))
-                        BulbExtensions.Set(bulb, (dynamic)response);
-                }
-                else
-                {
-                    //bulb.IsOn = false;
-                    bulb.isOffline = true;
-                    bulb.LastOfflineCheck = DateTime.UtcNow;
-                }
-            }
-
-			return response;
-		}
+            return response;
+        }
         //--------------------------------------------------------------------
 
         private bool IsSetPacket(PacketType pt)
@@ -77,64 +65,81 @@ namespace LifxMvc.Services
 
             return isSetPacket;
         }
-        //--------------------------------------------------------------------
+        //--------------------------------------------------------------------        
 
-        private bool BulbOfflineCheck(IBulb bulb)
+        private bool UseCachedBulbPower(IBulb bulb)
         {
-            bool okToSendRequestToBulb = true;
-
-            // If the bulb is offline, then wait BULB_OFFLINE_RETRY_TIME seconds before checking if it's back online.
-            if (bulb.isOffline)
+            bool useCache = false;
+            try
             {
-                double deltaTime = DateTime.UtcNow.Subtract(bulb.LastOfflineCheck).TotalMilliseconds;
-                if (deltaTime >= 0 && deltaTime <= BULB_OFFLINE_RETRY_TIME)
+                if (_BulbLock.Lock((IBulb)bulb))
                 {
-                    okToSendRequestToBulb = false;
+                    // If we recently got the Bulb State, then use the
+                    // cached values. No need to re-read everytime.        
+                    double deltaTime = DateTime.UtcNow.Subtract(bulb.LastPowerRequest).TotalMilliseconds;
+
+                    // If the time difference since the last time we read data from the light is negative, or
+                    // greater than BULB_LAST_READ_RETRY_TIME, then get the data from the light again.
+                    // Else, just use the old data
+                    if (deltaTime < 0 || deltaTime > BULB_LAST_READ_RETRY_TIME)
+                    {
+                        bulb.LastPowerRequest = DateTime.UtcNow;
+                        useCache = false;
+                    }
+                    else
+                        useCache = true;
                 }
             }
-
-            return okToSendRequestToBulb;
-        }
-        //--------------------------------------------------------------------
-
-        private bool IsOkToReadFromBulb(DateTime lastReadTime)
-        {
-            bool okToRead = false;
-
-            double deltaTime = DateTime.UtcNow.Subtract(lastReadTime).TotalMilliseconds;
-
-            // If the time difference since the last time we read data from the light is negative, or
-            // greater than BULB_LAST_READ_RETRY_TIME, then get the data from the light again.
-            // Else, just use the old data
-            if (deltaTime < 0 || deltaTime > BULB_LAST_READ_RETRY_TIME)
+            catch (Exception e)
             {
-                okToRead = true;
+                _BulbLock.Unlock((IBulb)bulb);
+            }
+            finally
+            {
+                _BulbLock.Unlock((IBulb)bulb);
             }
 
-            return okToRead;
+            return useCache;
         }
         //--------------------------------------------------------------------
 
-		bool SendAsync(IBulb bulb, LifxPacketBase packet) 
-		{
-            bool success = false;
+        private bool UseCachedBulbState(IBulb bulb)
+        {
+            bool useCache = false;
+            try
+            {
+                if (_BulbLock.Lock((IBulb)bulb))
+                {
+                    // If we recently got the Bulb State, then use the
+                    // cached values. No need to re-read everytime.        
+                    double deltaTime = DateTime.UtcNow.Subtract(bulb.LastStateRequest).TotalMilliseconds;
 
-            //if (!bulb.isOffline)
-            //{
-            //    var udp = UdpHelperManager.Instance[packet.IPEndPoint];
-            //    udp.SendAsync(packet);
-            //    success = true;
-            //}
-            //else
-            //{
-            //    //return false;
-            //}
+                    // If the time difference since the last time we read data from the light is negative, or
+                    // greater than BULB_LAST_READ_RETRY_TIME, then get the data from the light again.
+                    // Else, just use the old data
+                    if (deltaTime < 0 || deltaTime > BULB_LAST_READ_RETRY_TIME)
+                    {
+                        bulb.LastStateRequest = DateTime.UtcNow;
+                        useCache = false;
+                    }
+                    else
+                        useCache = true;
+                }
+            }
+            catch (Exception e)
+            {
+                _BulbLock.Unlock((IBulb)bulb);
+            }
+            finally
+            {
+                _BulbLock.Unlock((IBulb)bulb);
+            }
 
-            return success;
-		}
+            return useCache;
+        }
         //--------------------------------------------------------------------
-
-		public bool Initialize(IBulb bulb)
+        
+        public bool Initialize(IBulb bulb)
 		{
             bool isSuccess = false;
 
@@ -148,40 +153,34 @@ namespace LifxMvc.Services
                 isSuccess = this.LightGet(bulb, true);
             }
 
-			//this.DeviceGetGroup(bulb);
-			//this.DeviceGetLocation(bulb);
-
             return isSuccess;
 		}
         //--------------------------------------------------------------------
 
-		public bool LightGet(IBulb bulb, bool forceUpdate = false)
-		{
-            bool gotResponse = false;
-
-            if (IsOkToReadFromBulb(bulb.LastStateRequest) || forceUpdate)
+        public bool LightGet(IBulb bulb, bool forceUpdate = false)
+        {
+            try
             {
-                // update the Last Request time first so other threads that coming in 
-                // immediatly don't try reading as well
-                bulb.LastStateRequest = DateTime.UtcNow;
+                // If we're just going to use the cached values and not
+                // force an update, then just return
+                if (UseCachedBulbState(bulb) && !forceUpdate)
+                    return true;
 
                 var packet = new LightGetPacket(bulb);
-                var response = this.Send(bulb, packet);                
+                var response = this.Send(bulb, packet);
 
                 if (response != null)
-                {                    
-                    gotResponse = true;
-                }
-                else
                 {
-                    // If there was an issue reading, then set date time Min Value so
-                    // we try reading with the next request instead of waiting for the timeout.
-                    bulb.LastStateRequest = DateTime.MinValue;
+                    return true;
                 }
+
+            }
+            catch (Exception e)
+            {
             }
 
-            return gotResponse;
-		}
+            return false;
+        }
         //--------------------------------------------------------------------
         
         public bool DeviceGetVersion(IBulb bulb)
@@ -201,34 +200,22 @@ namespace LifxMvc.Services
         //--------------------------------------------------------------------
         
         public bool? LightGetPower(IBulb bulb)
-        {
-            // Only read from the bulb every 15 seconds. This helps eliminate
-            // every property asking the bulb for the same info.
-            if (IsOkToReadFromBulb(bulb.LastPowerRequest))
-            {
-                // update the Last Request time first so other threads that coming in 
-                // immediatly don't try reading as well
-                bulb.LastPowerRequest = DateTime.UtcNow;
-
+        {            
+            if (!UseCachedBulbPower(bulb))
+            {  
                 var packet = new LightGetPowerPacket(bulb);
-                var response = this.Send(bulb, packet);
-                if (response == null)
-                {
-                    // If there was an issue reading, then set date time Min Value so
-                    // we try reading with the next request instead of waiting for the timeout.
-                    bulb.LastPowerRequest = DateTime.MinValue;
-                }
+                var response = this.Send(bulb, packet);                
             }
 
             return bulb.isOffline ? null : (bool?)bulb.IsOn;
         }
         //--------------------------------------------------------------------
 
-		public bool LightSetPower(IBulb bulb, bool power)
-		{
-			bool isSuccess = false;
+        public bool LightSetPower(IBulb bulb, bool power)
+        {
+            bool isSuccess = false;
 
-            if (_BulbLock.Lock((Bulb)bulb))
+            try
             {
                 var packet = new LightSetPowerPacket(bulb, power);
                 var response = this.Send(bulb, packet);
@@ -238,33 +225,32 @@ namespace LifxMvc.Services
                     isSuccess = true;
                     bulb.IsOn = power;
                 }
-
-                _BulbLock.Unlock((Bulb)bulb);
+            }
+            catch (Exception e)
+            {
             }
 
             return isSuccess;
-		}
+        }
         //--------------------------------------------------------------------
         
-        public string LightGetColor(IBulb bulb)
+        public String LightGetColor(IBulb bulb)
         {
             // Get the latest Bulb HSBK settings 
-            this.LightGet(bulb);
-
+            LightGet(bulb);
             string colorString = String.Format("{0:X2}{1:X2}{2:X2}{3:X2}", bulb.Color.A, bulb.Color.R, bulb.Color.G, bulb.Color.B);
-
             return bulb.isOffline ? null : colorString;
         }
         //--------------------------------------------------------------------
 
-		public bool LightSetColor(IBulb bulb, Color color)
-		{
+        public bool LightSetColor(IBulb bulb, Color color)
+        {
             bool isSuccess = false;
 
-            if (_BulbLock.Lock((Bulb)bulb))
+            try
             {
                 // Get the latest Bulb HSBK settings (could have change from another source)
-                if (this.LightGet(bulb, true))
+                if (this.LightGet(bulb))
                 {
                     // create new HSBK from color
                     var hsbk = color.ToHSBK(bulb.IsKelvin);
@@ -277,11 +263,13 @@ namespace LifxMvc.Services
                     // Create the Packet and send request
                     isSuccess = LightSetHSBK(bulb);
                 }
-                _BulbLock.Unlock((Bulb)bulb);
             }
-            
+            catch (Exception e)
+            {
+            }
+
             return isSuccess;
-		}
+        }
         //--------------------------------------------------------------------
 
         public ushort? LightGetBrightness(IBulb bulb)
@@ -296,10 +284,10 @@ namespace LifxMvc.Services
         {
             bool isSuccess = false;
 
-            if (_BulbLock.Lock((Bulb)bulb))
+            try
             {
                 // Get the latest Bulb HSBK settings (could have change from another source)
-                if (this.LightGet(bulb, true))
+                if (this.LightGet(bulb))
                 {
                     // Update the brightness setting 
                     bulb.Brightness = brightness;
@@ -307,7 +295,9 @@ namespace LifxMvc.Services
                     // Create the Packet and send request
                     isSuccess = LightSetHSBK(bulb);
                 }
-                _BulbLock.Unlock((Bulb)bulb);
+            }
+            catch (Exception e)
+            {
             }
 
             return isSuccess;
@@ -326,10 +316,10 @@ namespace LifxMvc.Services
         {
             bool isSuccess = false;
 
-            if (_BulbLock.Lock((Bulb)bulb))
+            try
             {
                 // Get the latest Bulb HSBK settings (could have change from another source)
-                if (this.LightGet(bulb, true))
+                if (this.LightGet(bulb))
                 {
                     // Update the brightness setting 
                     bulb.Saturation = saturation;
@@ -337,7 +327,9 @@ namespace LifxMvc.Services
                     // Create the Packet and send request
                     isSuccess = LightSetHSBK(bulb);
                 }
-                _BulbLock.Unlock((Bulb)bulb);
+            }
+            catch (Exception e)
+            {
             }
 
             return isSuccess;
@@ -356,10 +348,10 @@ namespace LifxMvc.Services
         {
             bool isSuccess = false;
 
-            if (_BulbLock.Lock((Bulb)bulb))
+            try
             {
                 // Get the latest Bulb HSBK settings (could have change from another source)
-                if (this.LightGet(bulb, true))
+                if (this.LightGet(bulb))
                 {
                     // Update the brightness setting 
                     bulb.Kelvin = kelvin;
@@ -367,17 +359,12 @@ namespace LifxMvc.Services
                     // Create the Packet and send request
                     isSuccess = LightSetHSBK(bulb);
                 }
-                _BulbLock.Unlock((Bulb)bulb);
+            }
+            catch (Exception e)
+            {
             }
 
             return isSuccess;
-        }
-        //--------------------------------------------------------------------
-
-        public void LightSetWaveform(IBulb bulb, LightSetWaveformCreationContext ctx)
-        {
-            //var packet = new LightSetWaveformPacket(bulb, ctx);
-            //this.SendAsync(bulb, packet);
         }
         //--------------------------------------------------------------------
 

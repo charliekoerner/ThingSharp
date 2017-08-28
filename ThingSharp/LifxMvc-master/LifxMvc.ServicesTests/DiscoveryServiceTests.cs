@@ -54,15 +54,15 @@ namespace LifxMvc.Services.Tests
 
 		static void GetBulbs()
 		{
-			var svc = new DiscoveryService();
+            //var svc = new DiscoveryService();
 
-			var sw = Stopwatch.StartNew();
-			svc.DiscoverAsync();
-			sw.Stop();
-			Debug.Write(sw.Elapsed);
+            //var sw = Stopwatch.StartNew();
+            //svc.DiscoverAsync();
+            //sw.Stop();
+            //Debug.Write(sw.Elapsed);
 
             //Bulbs = new List<IBulb>(result);
-			Bulbs.Sort(new BulbComparer());
+            //Bulbs.Sort(new BulbComparer());
 
 			//var bulbService = new BulbService();
 			//foreach (var bulb in Bulbs)
@@ -374,19 +374,6 @@ namespace LifxMvc.Services.Tests
 				BulbService.DeviceGetLocation(bulb);
 			}
 		}
-
-		[TestMethod()]
-		public void LightSetWaveformTest()
-		{
-			for (int n = 0; n < EXECUTE_N_TIMES; ++n)
-				foreach (var bulb in Bulbs)
-			{
-				var ctx = this.CreateLightSetWaveformCreationContext(bulb);
-				Debug.WriteLine(bulb);
-				BulbService.LightSetWaveform(bulb, ctx);
-			}
-		}
-
 
 		LightSetWaveformCreationContext CreateLightSetWaveformCreationContext(IBulb bulb)
 		{

@@ -40,6 +40,7 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Management" />
+    <Reference Include="System.ServiceModel.Web" />
     <Reference Include="System.ServiceProcess" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -50,9 +51,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="DataModels\DataModel.cs" />
-    <Compile Include="DataModels\SMART_DEVICE_DATA_MODEL.cs" />
     <Compile Include="LogicalAdapter\LIfxAdapter.cs" />
-    <Compile Include="LogicalAdapter\SmartDeviceAdapter.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

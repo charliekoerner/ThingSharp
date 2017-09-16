@@ -68,57 +68,64 @@ namespace LifxMvc.Services
 
         private void Udp_DeviceDiscoveredAsync(object sender, DiscoveryEventArgs e)
         {
-            var ctx = e.DiscoveryContext;
-
-            // Check if we already found the bulb
-            IBulb ibulb = Bulbs.FirstOrDefault(x => x.IPEndPoint.ToString() == ctx.Sender.ToString());
-
-            if (ibulb != null)
+            try
             {
-                // if the buld is already found, then make sure it's Offline flag is FALSE
-                if (ibulb.isOffline)
+                var ctx = e.DiscoveryContext;
+
+                // Check if we already found the bulb
+                IBulb ibulb = Bulbs.FirstOrDefault(x => x.IPEndPoint.ToString() == ctx.Sender.ToString());
+
+                if (ibulb != null)
                 {
-                    ibulb.isOffline = false;
-                    Console.WriteLine("Device is back online: {0}", ctx.Sender.ToString());
-                }
-            }
-            else
-            {
-                Console.WriteLine("Received response from: {0}", ctx.Sender.ToString());
-
-                var bulb = new Bulb()
-                {
-                    IPEndPoint = ctx.Sender,
-                    Service = ctx.Response.Service,
-                    Port = ctx.Response.Port,
-                    TargetMacAddress = ctx.Response.TargetMacAddress,
-                    LastSeen = DateTime.UtcNow
-                };
-
-                bulb.isOffline = false;
-
-                var bulbSvc = new BulbService();
-                bool gotLightData = bulbSvc.Initialize(bulb);
-
-
-                // If we had an issue getting a response from the bulb, then don't add it to the list so
-                // we can try to re-discover it again.
-                if (gotLightData)
-                {
-                    Bulbs.Add(bulb);
-                    NewBulbList.Add(bulb); // list gets emptied when ThingServer requests new found bulbs
-
-                    Debug.WriteLine(Bulbs.Count);
+                    // if the buld is already found, then make sure it's Offline flag is FALSE
+                    if (ibulb.isOffline)
+                    {
+                        ibulb.isOffline = false;
+                        Console.WriteLine("Device is back online: {0}", ctx.Sender.ToString());
+                    }
                 }
                 else
                 {
-                    // Since the light data was not properly read, we need to remove the IP from the 
-                    // Discovered bulb list so we can try discovering it again and hopefully read the 
-                    // light data
-                    string bulbAddress = bulb.IPEndPoint.Address.ToString();
-                    //_udp.RemoveFromDiscoveredBulbList(bulbAddress);
-                    Debug.WriteLine("-- Trouble getting response from bulb: " + bulbAddress);
+                    Console.WriteLine("Received response from: {0}", ctx.Sender.ToString());
+
+                    var bulb = new Bulb()
+                    {
+                        IPEndPoint = ctx.Sender,
+                        Service = ctx.Response.Service,
+                        Port = ctx.Response.Port,
+                        TargetMacAddress = ctx.Response.TargetMacAddress,
+                        LastSeen = DateTime.UtcNow
+                    };
+
+                    bulb.isOffline = false;
+
+                    var bulbSvc = new BulbService();
+                    bool gotLightData = bulbSvc.Initialize(bulb);
+
+
+                    // If we had an issue getting a response from the bulb, then don't add it to the list so
+                    // we can try to re-discover it again.
+                    if (gotLightData)
+                    {
+                        Bulbs.Add(bulb);
+                        NewBulbList.Add(bulb); // list gets emptied when ThingServer requests new found bulbs
+
+                        Debug.WriteLine(Bulbs.Count);
+                    }
+                    else
+                    {
+                        // Since the light data was not properly read, we need to remove the IP from the 
+                        // Discovered bulb list so we can try discovering it again and hopefully read the 
+                        // light data
+                        string bulbAddress = bulb.IPEndPoint.Address.ToString();
+                        //_udp.RemoveFromDiscoveredBulbList(bulbAddress);
+                        Debug.WriteLine("-- Trouble getting response from bulb: " + bulbAddress);
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("ERROR: {0} {1}", "Udp_DeviceDiscoveredAsync", ex.Message);
             }
         }
 

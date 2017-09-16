@@ -74,7 +74,8 @@ namespace ThingSharp.Server
                 }
             else
             {
-                throw new Resource.ResourceNotFoundException();
+                return null;
+                //throw new Resource.ResourceNotFoundException();
             }
         }
 
@@ -99,7 +100,10 @@ namespace ThingSharp.Server
                 }
             }
             else
-                throw new Resource.ResourceNotFoundException() { Message = "Resource not found" };
+            {
+                return null;
+                //throw new Resource.ResourceNotFoundException() { Message = "Resource not found" };
+            }
         }
 
         public ThingContainer ResourceContainer

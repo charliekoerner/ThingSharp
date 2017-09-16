@@ -83,14 +83,7 @@ namespace ThingSharp.Drivers
         //-------------------------------------------------------------
         public string GetBulbObjectLabel(Object bulb)
         {
-            IBulb b = (IBulb)bulb;
-
-            if (String.IsNullOrEmpty(b.Label))
-            {
-                System.Diagnostics.Debug.WriteLine("----- Bulb Label not set ----");
-            }
-
-            return b.Label;
+            return ((IBulb)bulb).Label;
         }
         //-------------------------------------------------------------
         public string GetBulbEndPoint(Object bulb)

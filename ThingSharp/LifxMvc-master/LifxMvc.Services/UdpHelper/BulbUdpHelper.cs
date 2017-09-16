@@ -16,7 +16,7 @@ namespace LifxMvc.Services.UdpHelper
 	public class BulbUdpHelper : IDisposable
 	{
 		const int MAX_TX_PER_SECOND = 1000 / 10;
-        const int LOCK_TIMEOUT = 8000;
+        const int LOCK_TIMEOUT = 4500;
         private IAsyncResult _currentAsyncResult;
         private readonly object _objLock = new object();
 
@@ -45,25 +45,29 @@ namespace LifxMvc.Services.UdpHelper
 		{
 			this.StopListeningEvent = new ManualResetEventSlim(false);
 			this.IsAvailableEvent = new ManualResetEventSlim(true);
-			//CreateUdpClient(ep);
             EndPoint = ep;
 		}
 
 		private void CreateUdpClient(IPEndPoint ep)
 		{
+            ////try
+            ////{
+            ////    UdpClient.Close();
+            ////}
+            ////catch(Exception e)
+            ////{
+            ////    // do nothing
+            ////}
+
             try
             {
-                UdpClient.Close();
+                UdpClient = new UdpClient(ep.Address.ToString(), ep.Port);
+                UdpClient.DontFragment = true;
             }
             catch(Exception e)
             {
-                // do nothing
+                Console.WriteLine("ERROR: Socket connection failed (http://{0}:{1}", ep.Address.ToString(), ep.Port);
             }
-
-
-            UdpClient = new UdpClient(ep.Address.ToString(), ep.Port);
-
-            UdpClient.DontFragment = true;
 
 			//return client;
 		}
@@ -83,32 +87,29 @@ namespace LifxMvc.Services.UdpHelper
 			task.Start();
 		}
 
-        ConcurrentBag<Task> BulbRequestDataTask { get; set; }
+        //ConcurrentBag<Task> BulbRequestDataTask { get; set; }
         public R Send<R>(LifxPacketBase<R> packet, IBulb bulb)
             where R : LifxResponseBase
         {
 
             R result = null;
             LifxResponseBase response = null;
-
+            int retries = 0;
+            int timeout = 4000;
             bool enteredLock = false;
-
+            
             try
             {
-                int retries = 3;
-                int timeout = 500;
+                // If bulb is Offline, then just return
+                if (bulb.isOffline)
+                    return result;
+                
                 enteredLock = Monitor.TryEnter(_objLock, LOCK_TIMEOUT);
-
-                if (enteredLock)
+                if (enteredLock && !bulb.isOffline)
                 {
-                    // If bulb is Offline, then just return
-                    if (bulb.isOffline)
-                        return result;
-
+                    CreateUdpClient(EndPoint);
                     while (result == null && retries >= 0)
                     {
-                        CreateUdpClient(EndPoint);
-
                         // Start the 'GetResponse' method in a Task thread (this starts the response lisenter
                         //  before we send the packet)
                         var action = new Action(() => response = GetResponse(packet.Header.Source, timeout));
@@ -134,14 +135,20 @@ namespace LifxMvc.Services.UdpHelper
                     // Set offline flag based on result data
                     bulb.isOffline = (result == null);
                 }
+                else
+                {
+                    Console.WriteLine("didn't get lock");
+                }
             }
             catch(Exception e)
             {
+                UdpClient.Close();
                 if (enteredLock)
                     Monitor.Exit(_objLock);
             }
             finally
             {
+                UdpClient.Close();
                 if (enteredLock)
                     Monitor.Exit(_objLock);
             }            
@@ -179,8 +186,9 @@ namespace LifxMvc.Services.UdpHelper
 			var ts = DateTime.Now - this.LastSentTime;
 			if (ts.Milliseconds < MAX_TX_PER_SECOND)
 			{
-				var wait = new ManualResetEventSlim(false);
-				wait.Wait(ts.Milliseconds);
+				//var wait = new ManualResetEventSlim(false);
+				//wait.Wait(ts.Milliseconds);
+                Thread.Sleep(ts.Milliseconds);
 			}
 		}        
 
@@ -213,7 +221,7 @@ namespace LifxMvc.Services.UdpHelper
                         if (_currentAsyncResult == asyncResult)
                         {
                             if (asyncResult.IsCompleted)
-                            {
+                            {                                
                                 data = this.UdpClient.EndReceive(asyncResult, ref EndPoint);
                                 TraceData(data);
 
@@ -256,7 +264,115 @@ namespace LifxMvc.Services.UdpHelper
             }
 
 			return result;
-		}        
+		}
+
+        public R Send2<R>(LifxPacketBase<R> packet, IBulb bulb)
+            where R : LifxResponseBase
+        {
+            R result = null;
+            int retries = 0;
+            int timeout = 4000;
+            bool enteredLock = false;
+
+            try
+            {
+                // If bulb is Offline, then just return
+                if (bulb.isOffline)
+                    return result;
+
+                enteredLock = Monitor.TryEnter(_objLock, LOCK_TIMEOUT);
+                if (enteredLock && !bulb.isOffline)
+                {
+                    CreateUdpClient(EndPoint);
+                    while (result == null && retries >= 0)
+                    {
+                        //CreateUdpClient(EndPoint);
+
+                        // Start the 'GetResponse' method in a Task thread (this starts the response lisenter
+                        //  before we send the packet)
+                        //var action = new Action(() => response = GetResponse(packet.Header.Source, timeout));
+                        //var task = Task.Factory.StartNew(action);
+
+                        // Send the data packet to the bulb
+                        byte[] data = this.SendImpl(packet);
+
+
+                        byte[] responseData = null;
+                        LifxResponseBase responsePacket = null;
+                        uint responseSource = 0;
+                        byte responseSequence = 0;
+                        while (responseSource < packet.Header.Source)//Compare sources in order to match the packet to the response.
+                        {
+                            responsePacket = null;
+                            var asyncResult = this.UdpClient.BeginReceive(null, null);
+                            _currentAsyncResult = asyncResult;
+
+                            var signaled = asyncResult.AsyncWaitHandle.WaitOne(timeout);
+                            if (signaled)
+                            {
+                                if (_currentAsyncResult == asyncResult)
+                                {
+                                    if (asyncResult.IsCompleted)
+                                    {
+                                        responseData = this.UdpClient.EndReceive(asyncResult, ref EndPoint);
+                                        TraceData(responseData);
+
+                                        responsePacket = ResponseFactory.Parse(responseData, EndPoint);
+                                        responseSource = responsePacket.Source;
+                                        responseSequence = responsePacket.Sequence;
+                                        responsePacket.TraceReceived(this.UdpClient.Client.LocalEndPoint);
+                                    }
+                                }
+                                else
+                                {
+                                    Debug.WriteLine("{0}{1}", DateTime.Now.ToString("HH:mm:ss.ffff"), " --- UDP BeginReceive and EndReceive don't match up.");
+                                    Console.WriteLine("{0}{1}", DateTime.Now.ToString("HH:mm:ss.ffff"), " --- UDP BeginReceive and EndReceive don't match up.");
+                                    break;
+                                }
+                            }
+                            else
+                            {
+                                // We've timed out.
+                                Debug.WriteLine("Waiting for Response timed out.");
+                                break;
+                            }
+                        }
+
+                        // double the timeout length during the next retry
+                        timeout = timeout * 2;
+                        retries--;
+                        packet.Header.Source += 100;
+
+                        if (responsePacket is R)
+                        {
+                            result = responsePacket as R;
+                        }
+                    }
+
+                    // Set offline flag based on result data
+                    bulb.isOffline = (result == null);
+                }
+                else
+                {
+                    Console.WriteLine("didn't get lock");
+                }
+            }
+            catch (Exception e)
+            {
+                UdpClient.Close();
+                if (enteredLock)
+                    Monitor.Exit(_objLock);
+            }
+            finally
+            {
+                UdpClient.Close();
+                if (enteredLock)
+                    Monitor.Exit(_objLock);
+            }
+
+            return result;
+        }
+
 
 		static void TraceData(byte[] data)
 		{

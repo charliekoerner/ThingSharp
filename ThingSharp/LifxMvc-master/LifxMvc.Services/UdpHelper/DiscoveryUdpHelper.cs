@@ -23,14 +23,11 @@ namespace LifxMvc.Services.UdpHelper
 
         const int LISTEN_DICOVERY_TIMEOUT = 15000; // 15 seconds
 
-        const int UDP_SERVICE_SUPPORTED = 1;
+        const int UDP_SERVICE_SUPPORTED = 1; // UDP Supported Flag
 
         bool KEEP_LISTENING = true;
 
         private UdpClient discoverySocket = null;
-
-        //private ConcurrentDictionary<string, int> discoveredBulbList = new ConcurrentDictionary<string, int>();
-
         DiscoveryService DiscoverySvc = null;
 
         Task ListeningTask { get; set; }
@@ -55,13 +52,20 @@ namespace LifxMvc.Services.UdpHelper
 
         private void CreateUdpClient()
         {
-            discoverySocket = new UdpClient();
+            try
+            {
+                discoverySocket = new UdpClient();
 
-            discoverySocket.DontFragment = true;
-            discoverySocket.EnableBroadcast = true;
+                discoverySocket.DontFragment = true;
+                discoverySocket.EnableBroadcast = true;
 
-            discoverySocket.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            discoverySocket.Client.Bind(new IPEndPoint(LocalEndpointIpAddress, SERVICE_PORT_NO));            
+                discoverySocket.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                discoverySocket.Client.Bind(new IPEndPoint(LocalEndpointIpAddress, SERVICE_PORT_NO));
+            }
+            catch (Exception e)
+            {
+
+            }
         }
         //--------------------------------------------------------------------
 
@@ -126,8 +130,6 @@ namespace LifxMvc.Services.UdpHelper
             IPEndPoint destEP = new IPEndPoint(broadcastIP, PORT_NO);
             packet.IPEndPoint = destEP;
 
-            CreateUdpClient();
-
             // Broadcast out the discovery packet
             SendPacket(data, destEP, packet);
 
@@ -172,7 +174,6 @@ namespace LifxMvc.Services.UdpHelper
                         // Re-establish the UDP connection.
                         // It seems that the udp connections will stop receiving data after aperiod of time.
                         CloseUdpClient();
-                        CreateUdpClient();
 
                         SendPacket(data, destEP, packet);
                     }
@@ -182,12 +183,8 @@ namespace LifxMvc.Services.UdpHelper
                     Debug.WriteLine(e.ToString());
                     Console.WriteLine("ERROR: {0}:{1}", MethodInfo.GetCurrentMethod(), e.Message);
                     Console.WriteLine("Waiting 30 Seconds before trying to re-establish connection");
-                    System.Threading.Thread.Sleep(30000);
-
-                    // Re-establish the UDP connection.
-                    // It seems that the udp connections will stop receiving data after aperiod of time.
+                    System.Threading.Thread.Sleep(30000);                    
                     CloseUdpClient();
-                    CreateUdpClient();
                 }
             }
 
@@ -199,6 +196,7 @@ namespace LifxMvc.Services.UdpHelper
         {
             try
             {
+                CreateUdpClient();
                 Console.WriteLine("Send Discovery Packet...");
                 Debug.WriteLine("{0}{1}", DateTime.Now.ToString("HH:mm:ss.ffff"), " --- Send Service Discovery Packet");
                 discoverySocket.Send(data, data.Length, destEP);

@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading.Tasks;
 using ThingSharp.Types;
 using System.Diagnostics;
+using System.Security.Cryptography.X509Certificates;
 
 namespace ThingSharp.Bindings
 {
@@ -18,6 +19,7 @@ namespace ThingSharp.Bindings
         private string[] prefixes;
         HttpListener listener;
         IBindingClient client;
+        bool KEEP_LISTENING = true;
         public HTTPBinding(string[] prefixes)
         {
             this.prefixes = prefixes;
@@ -45,6 +47,16 @@ namespace ThingSharp.Bindings
             public Object error { get; set; }
         }
 
+        //private static void InstallCertificate(string cerFileName)
+        //{
+        //    X509Certificate2 certificate = new X509Certificate2(cerFileName);
+        //    X509Store store = new X509Store(StoreName.TrustedPublisher, StoreLocation.LocalMachine);
+
+        //    store.Open(OpenFlags.ReadWrite);
+        //    store.Add(certificate);
+        //    store.Close();
+        //}
+
         private long threadCount = 0;
         public void Listen()
         {
@@ -68,13 +80,21 @@ namespace ThingSharp.Bindings
             Console.WriteLine("Listening...");
             //System.Diagnostics.Trace.WriteLine("Listening...");
 
-            listener.Start();
+            //listener.Start();
 
-            while (listener.IsListening)
+            ////////using (var client = listener.AcceptTcpClient())
+            ////////using (var sslStream = new SslStream(client.GetStream(), false, App_CertificateValidation))
+            ////////{
+            ////////    sslStream.AuthenticateAsServer(serverCertificate, true, SslProtocols.Tls12, false);
+
+            ////////    //send/receive from the sslStream
+            ////////}
+
+            while (KEEP_LISTENING)
             {
-                //listener.Start();
-                //if (!listener.IsListening)
-                //    break;
+                listener.Start();
+                if (!listener.IsListening)
+                    break;
 
                 try
                 {
@@ -84,7 +104,9 @@ namespace ThingSharp.Bindings
                     // Send the request off to the processing thread
                     HandleRequest(context);
                     threadCount++;
-                    //Console.WriteLine("Thread Count: {0}", threadCount);
+
+                    //HttpListenerRequest request = context.Request;
+                    //Console.WriteLine("Thread Count: {0}  {1}", threadCount, request.Url);
                 }
                 catch (Exception e)
                 {
@@ -103,113 +125,135 @@ namespace ThingSharp.Bindings
 
         private void HandleRequestAsync(HttpListenerContext context)
         {
-            Stopwatch sw;
-
-            System.Threading.Thread.Sleep(100);
-
-            // Start timing the amount of time it takes for each request
-            sw = Stopwatch.StartNew();
-
-            HttpListenerRequest request = context.Request;
-            // Obtain a response object.
-            HttpListenerResponse response = context.Response;
-            // Construct a response.
-            string responseString = "{\"Command\":\"Not Supported\"}";
-            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-
-            Object r;
-            if (client != null)
-            {
-                if (request.HttpMethod == "GET")
-                {
-                    try
-                    {
-                        r = client.Read(request.Url);
-                        if (r == null)
-                        {
-                            //Console.WriteLine("--Resource Not Responding");
-                            response.StatusCode = (int)HttpStatusCode.NotFound;
-                            responseString = "{\"Resource\":\"Not Responding\"}";
-                            buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                        }
-                        else
-                        {
-                            if (!(r is Thing || r is List<HypermediaLink>))
-                            {
-                                ValueObject valObj = new ValueObject() { value = r };
-                                r = JsonConvert.SerializeObject(valObj);
-                            }
-                            else if (r is Thing)
-                            {
-                                r = JsonConvert.SerializeObject(r);
-                            }
-                            else if (r is List<HypermediaLink>)
-                            {
-                                HypermediaLinks links = new HypermediaLinks() { links = r };
-                                r = JsonConvert.SerializeObject(links);
-                            }
-                            response.StatusCode = (int)HttpStatusCode.OK;
-                        }
-                    }
-                    catch (Exception e)
-                    {
-                        //Console.WriteLine("--INTERNAL ERROR!");
-                        response.StatusCode = (int)GetStatusCodeForException(e); ;
-                        r = e.Message;
-                    }
-                    if (r != null)
-                    {
-                        buffer = System.Text.Encoding.UTF8.GetBytes(r.ToString());
-                    }
-                }
-                else if (request.HttpMethod == "PUT")
-                {
-                    UpdateResponse ur = new UpdateResponse() { error = null };
-                    try
-                    {
-                        TextReader reader = new StreamReader(request.InputStream);
-                        String content = reader.ReadToEnd();
-                        ValueObject valObj = JsonConvert.DeserializeObject<ValueObject>(content);
-                        r = client.Write(request.Url, valObj.value);
-                        if ((bool)r == true)
-                            response.StatusCode = (int)HttpStatusCode.Accepted;
-                        else
-                            response.StatusCode = (int)HttpStatusCode.NotFound; // Error 404
-                    }
-                    catch (Exception e)
-                    {
-                        r = e.Message;
-                        ur.error = e;
-                        response.StatusCode = (int)GetStatusCodeForException(e);
-                    }
-                    String urs = JsonConvert.SerializeObject(ur);
-                    buffer = System.Text.Encoding.UTF8.GetBytes(urs);
-                }
-            }
-            // Get a response stream and write the response to it.
-            response.ContentLength64 = buffer.Length;
-            response.ContentType = "application/json";
-            System.IO.Stream output = response.OutputStream;
             try
             {
-                if (output != null)
+
+                Stopwatch sw = null;
+
+                // Start timing the amount of time it takes for each request
+                sw = Stopwatch.StartNew();
+
+                HttpListenerRequest request = context.Request;
+                // Obtain a response object.
+                HttpListenerResponse response = context.Response;
+                // Construct a response.
+                string responseString = "{\"Command\":\"Not Supported\"}";
+                byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+
+                Object r;
+                if (client != null)
                 {
-                    output.Write(buffer, 0, buffer.Length);
-                    // You must close the output stream.
+                    if (request.HttpMethod == "GET")
+                    {
+                        try
+                        {
+                            r = client.Read(request.Url);
+
+                            if (r == null)
+                            {
+                                //Console.WriteLine("--Resource Not Responding");
+                                response.StatusCode = (int)HttpStatusCode.NotFound;
+                                responseString = "{\"Resource\":\"Not Responding\"}";
+                                buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                            }
+                            else
+                            {
+                                if (!(r is Thing || r is List<HypermediaLink>))
+                                {
+                                    ValueObject valObj = new ValueObject() { value = r };
+                                    r = JsonConvert.SerializeObject(valObj);
+                                }
+                                else if (r is Thing)
+                                {
+                                    r = JsonConvert.SerializeObject(r);
+                                }
+                                else if (r is List<HypermediaLink>)
+                                {
+                                    HypermediaLinks links = new HypermediaLinks() { links = r };
+                                    r = JsonConvert.SerializeObject(links);
+                                }
+                                response.StatusCode = (int)HttpStatusCode.OK;
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            //Console.WriteLine("--INTERNAL ERROR!");
+                            response.StatusCode = (int)GetStatusCodeForException(e);
+                            r = e.Message;
+                        }
+                        if (r != null)
+                        {
+                            buffer = System.Text.Encoding.UTF8.GetBytes(r.ToString());
+                        }
+                    }
+                    else if (request.HttpMethod == "PUT")
+                    {
+                        UpdateResponse ur = new UpdateResponse() { error = null };
+                        try
+                        {
+                            TextReader reader = new StreamReader(request.InputStream);
+                            String content = reader.ReadToEnd();
+                            ValueObject valObj = JsonConvert.DeserializeObject<ValueObject>(content);
+                            r = client.Write(request.Url, valObj.value);
+                            if (r == null)
+                            {
+                                response.StatusCode = (int)HttpStatusCode.NotFound;
+                                ur.error = "Not Responding";
+                            }
+                            else
+                            {
+                                if ((bool)r == true)
+                                    response.StatusCode = (int)HttpStatusCode.Accepted;
+                                else
+                                    response.StatusCode = (int)HttpStatusCode.NotFound; // Error 404
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            r = e.Message;
+                            ur.error = e;
+                            response.StatusCode = (int)GetStatusCodeForException(e);
+                        }
+                        String urs = JsonConvert.SerializeObject(ur);
+                        buffer = System.Text.Encoding.UTF8.GetBytes(urs);
+                    }
+                }
+
+                System.IO.Stream output = null;
+                try
+                {
+                    // Get a response stream and write the response to it.
+                    response.ContentLength64 = buffer.Length;
+                    response.ContentType = "application/json";
+                    output = response.OutputStream;
+
+                    if (output != null)
+                    {
+                        output.Write(buffer, 0, buffer.Length);
+                        // You must close the output stream.
+                        if (output != null)
+                            output.Close();
+                    }
+                }
+                catch (Exception e)
+                {
+                    // Usually get here during debugging if we take to long to responde.
+                    // Just clode the stream and move on.
                     output.Close();
                 }
+
+                if (sw != null)
+                {
+                    sw.Stop();
+                    //Console.WriteLine("RequestReceived -- Overall TimeElapsed: {0} ({1})", sw.Elapsed, threadCount);
+                }
+
+                threadCount--;
             }
-            catch (Exception e)
+            catch(Exception e)
             {
-                // Usually get here during debugging if we take to long to responde.
-                // Just clode the stream and move on.
-                output.Close();
+                Debug.WriteLine("{0}", e);
             }
-
-            sw.Stop();
-            //Console.WriteLine("RequestReceived -- Overall TimeElapsed: {0}", sw.Elapsed);
-
-            threadCount--;
 
         }
 
@@ -237,6 +281,7 @@ namespace ThingSharp.Bindings
         {
             try
             {
+                KEEP_LISTENING = false;
                 listener.Stop();
                 //mListeningThread.CancelAsync();
             }

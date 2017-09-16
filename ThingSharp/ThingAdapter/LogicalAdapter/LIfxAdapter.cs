@@ -18,6 +18,7 @@ namespace ThingSharp.ThingSharp
     {
         // Class Constants
         const int CHECK_FOR_NEW_BULBS_WAIT = 5000;
+        bool KEEP_CHECKING_FOR_BULBS = true;
 
         // Class variables
         static int count = 1;
@@ -61,6 +62,7 @@ namespace ThingSharp.ThingSharp
         public override void Stop()
         {
             driver.StopDiscovery();
+            KEEP_CHECKING_FOR_BULBS = false;
         }
         //--------------------------------------------------------------------
 
@@ -79,7 +81,7 @@ namespace ThingSharp.ThingSharp
                 int bulbLabelIndex = 1;
                 int TotalBulbCount = 0;
 
-                while (true)
+                while (KEEP_CHECKING_FOR_BULBS)
                 {
                     List<object> bulbs = driver.GetNewBulbs();
 
@@ -177,11 +179,12 @@ namespace ThingSharp.ThingSharp
             }
                 
             sw.Stop();
+            
             string offline = "";
             if (driver.IsBulbOffline(property.Parent.SubsystemContext))
                 offline = "--offline";
             Console.WriteLine("GET:{0}\t -- TimeElapsed: {1}   ({2})  {3} {4}", property.Name, sw.Elapsed, count++, driver.GetBulbObjectLabel(property.Parent.SubsystemContext), offline);
-
+            
             return value;
         }
         //--------------------------------------------------------------------

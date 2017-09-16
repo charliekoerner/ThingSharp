@@ -5,12 +5,12 @@ using System.Runtime.InteropServices;
 // General Information about an assembly is controlled through the following 
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
-[assembly: AssemblyTitle("ThingSharpServer")]
+[assembly: AssemblyTitle("WindowsFormsApplication1")]
 [assembly: AssemblyDescription("")]
 [assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("ThingSharpServer")]
-[assembly: AssemblyCopyright("Copyright ©  2017")]
+[assembly: AssemblyCompany("Licence Owner")]
+[assembly: AssemblyProduct("WindowsFormsApplication1")]
+[assembly: AssemblyCopyright("Copyright © Licence Owner 2017")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
 
@@ -20,7 +20,7 @@ using System.Runtime.InteropServices;
 [assembly: ComVisible(false)]
 
 // The following GUID is for the ID of the typelib if this project is exposed to COM
-[assembly: Guid("36f4b46c-0623-4626-af3f-bee07fc9ba6d")]
+[assembly: Guid("e393ab80-2cda-4076-83da-caea589ffd2a")]
 
 // Version information for an assembly consists of the following four values:
 //

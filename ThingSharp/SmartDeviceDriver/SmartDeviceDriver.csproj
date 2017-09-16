@@ -31,17 +31,20 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="Colorspace">
+    <Reference Include="Colorspace, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\LifxMvc-master\LifxMvc.Services\bin\Debug\Colorspace.dll</HintPath>
     </Reference>
     <Reference Include="LifxMvc.Contracts, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <HintPath>..\LifxMvc-master\LifxMvc.Services\bin\Debug\LifxMvc.Contracts.dll</HintPath>
       <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\LifxMvc-master\LifxMvc.Services\bin\Debug\LifxMvc.Contracts.dll</HintPath>
     </Reference>
-    <Reference Include="LifxMvc.Domain">
+    <Reference Include="LifxMvc.Domain, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\LifxMvc-master\LifxMvc.Services\bin\Debug\LifxMvc.Domain.dll</HintPath>
     </Reference>
-    <Reference Include="LifxMvc.Services">
+    <Reference Include="LifxMvc.Services, Version=1.0.0.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
       <HintPath>..\LifxMvc-master\LifxMvc.Services\bin\Debug\LifxMvc.Services.dll</HintPath>
     </Reference>
     <Reference Include="Newtonsoft.Json, Version=9.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
@@ -61,7 +64,6 @@
   <ItemGroup>
     <Compile Include="LifxDriver.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="SmartDeviceDriver.cs" />
   </ItemGroup>
   <ItemGroup>
     <WCFMetadata Include="Service References\" />

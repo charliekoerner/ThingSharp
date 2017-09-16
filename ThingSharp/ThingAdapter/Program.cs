@@ -8,6 +8,8 @@ using ThingSharp.Utils;
 using System.ServiceProcess;
 using System.Reflection;
 
+using System.ServiceModel.Web;
+
 
 namespace ThingSharp.ThingSharp
 {
@@ -27,10 +29,11 @@ namespace ThingSharp.ThingSharp
             string myExeDir = System.IO.Path.GetFullPath(Assembly.GetExecutingAssembly().Location);
             string appName = Assembly.GetExecutingAssembly().GetName().Name;
 
-            //_Args = new ArgParser(Environment.GetCommandLineArgs());
             _Args = new ArgParser(args);
 
-            if (IsService(appName))
+            ServiceManager SvcMgr = new ServiceManager();
+
+            if (SvcMgr.IsService(appName))
             {
                 // running as service
                 using (var service = new Service())
@@ -48,7 +51,7 @@ namespace ThingSharp.ThingSharp
                 {
                     if (!_Args.VerifyFormat())
                     {
-                        // if the args were entering incorrectly, then display the usage
+                        // If the args were entered incorrectly, then display the usage
                         // repoart and quit.
                         Console.WriteLine("ERROR: Command line arguments are not formatted correctly.");
                         usage(appName);
@@ -58,16 +61,16 @@ namespace ThingSharp.ThingSharp
 
                     if (_Args.exists(@"-service"))
                     {
-                        InstallService();
+                        SvcMgr.InstallService(_Args);
                     }
                     else if (_Args.exists(@"-uninstall"))
                     {
-                        UninstallService();
+                        SvcMgr.UninstallService();
                     }
                     else
                     {
-                        // Check if also running as a service
-                        CheckIfServiceIsInstalled(appName);
+                        // Check if the App is also installed as a service
+                        SvcMgr.CheckIfServiceIsInstalled(appName);
 
                         // Run the Program normally
                         Start(args, false);
@@ -113,6 +116,8 @@ namespace ThingSharp.ThingSharp
             int httpPort = 8080;
             string ipDisplay = String.Empty;
             string portDisplay = String.Format("{0} (automatic)", httpPort);
+            string securityDisplay = "(unsecure)";
+            string urlPrefix = "http";
 
 
             if (_Args.exists(@"-ip"))
@@ -145,15 +150,22 @@ namespace ThingSharp.ThingSharp
                 portDisplay = String.Format("{0} (manual)", httpPort);
             }
 
-            Console.WriteLine("EndPoint");
-            Console.WriteLine("   IP: {0}", ipDisplay);
-            Console.WriteLine(" Port: {0}", portDisplay);
-            Console.WriteLine("---------------------------------");
+            if(_Args.exists(@"-secure"))
+            {
+                securityDisplay = "(secure)";
+                urlPrefix = "https";
+            }            
 
-            String httpEnpoint = String.Format("http://{0}:{1}/", localEndpoint.ToString(), httpPort);
+            String httpEnpoint = String.Format("{0}://{1}:{2}/", urlPrefix, localEndpoint.ToString(), httpPort);
 
-            //First we choose what kind of protocol binding we want on top.
-            //At the moment we have HTTP in stock, but expect WebSockets, CoAP etc next season.
+            Console.WriteLine("EndPoint:");
+            Console.WriteLine("      IP: {0}", ipDisplay);
+            Console.WriteLine("    Port: {0}", portDisplay);
+            Console.WriteLine("Security: {0} {1}", urlPrefix, securityDisplay);
+            Console.WriteLine("-------------------------------------------");
+
+            // First we choose what kind of protocol binding we want on top.
+            // At the moment we have HTTP in stock, but expect WebSockets, CoAP etc next season.
             Uri baseUri = new Uri(httpEnpoint);
             ProtocolBinding httpBinding = new HTTPBinding(new string[] { httpEnpoint });
 
@@ -185,135 +197,9 @@ namespace ThingSharp.ThingSharp
         private static void Stop()
         {
             _Server.Stop();
-
-            // TEMPORARY CODE. Force service to stop quickly for debugging
-            //Environment.Exit(0);
         }
         //--------------------------------------------------------------------
-
-        /// <summary>
-        /// Checks if launched as a Service or Console App
-        /// </summary>
-        private static bool IsService(string serviceName)
-        {
-            bool isService = false;
-
-            try
-            {
-                //string title = Console.Title;
-                Console.Title = serviceName;
-            }
-            catch (Exception e)
-            {
-                isService = true;
-            }
-
-            return isService;
-        }
-        //--------------------------------------------------------------------
-
-        /// <summary>
-        /// Installs the application as a service
-        /// </summary>
-        private static void InstallService()
-        {
-            // Since this is running as a Console App and we got the service flag, then
-            // we need to install the exe as a service (if not already) and
-            // start the service. Since the service will be running, we can let this
-            // instance of the executable end.
-
-            try
-            {
-                string myExeDir = System.IO.Path.GetFullPath(Assembly.GetExecutingAssembly().Location);
-                string serviceName = Assembly.GetExecutingAssembly().GetName().Name;
-
-                ServiceManager SvcMgr = new ServiceManager();
-
-                // Check if service is installed
-                if (SvcMgr.ServiceIsInstalled(serviceName))
-                {
-                    // Update the service
-                    //SvcMgr.Update(serviceName, serviceName, myExeDir + String.Format(" {0} {1}", _Args.getValue("-ip"), _Args.getValue("-port")));
-                    SvcMgr.Uninstall(serviceName);
-                    SvcMgr.Install(serviceName, serviceName, myExeDir + String.Format(" {0} {1}", _Args.getArg("-ip"), _Args.getArg("-port")));
-                    Console.WriteLine("The service [{0}] was updated successfully", serviceName);
-                }
-                else
-                {
-                    // Install the service                        
-                    SvcMgr.Install(serviceName, serviceName, myExeDir + String.Format(" {0} {1}", _Args.getArg("-ip"), _Args.getArg("-port")));
-                    Console.WriteLine("The service [{0}] was installed successfully", serviceName);
-                }
-
-                // Start the Service
-                SvcMgr.StartService(serviceName);
-                Console.WriteLine("The service [{0}] started successfully", serviceName);
-
-                //Console.WriteLine("The following command line arguments were passed in: \n{0}", string.Join("\n", args));
-                Console.WriteLine("\nPress any key to close...");
-                Console.ReadKey(true);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e.ToString());
-                Console.WriteLine("Press any key to close...");
-                Console.ReadKey(true);
-            }
-        }
-        //--------------------------------------------------------------------
-
-        /// <summary>
-        /// Uninstalls the service
-        /// </summary>
-        private static void UninstallService()
-        {
-            try
-            {
-                string myExeDir = System.IO.Path.GetFullPath(Assembly.GetExecutingAssembly().Location);
-                string serviceName = Assembly.GetExecutingAssembly().GetName().Name;
-
-                ServiceManager SvcMgr = new ServiceManager();
-
-                SvcMgr.Uninstall(serviceName);
-
-                Console.WriteLine("The service [{0}] was Uninstalled successfully", serviceName);
-                Console.WriteLine("Press any key to close...");
-                Console.ReadKey(true);
-
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Error: Could not uninstall service");
-                Console.WriteLine(e.ToString());
-                Console.WriteLine("Press any key to close...");
-                Console.ReadKey(true);
-            }
-        }
-        //--------------------------------------------------------------------
-
-        /// <summary>
-        /// Report is service is installed
-        /// </summary>
-        private static void CheckIfServiceIsInstalled(string appName)
-        {
-            try
-            {
-                ServiceManager SvcMgr = new ServiceManager();
-                if(SvcMgr.ServiceIsInstalled(appName))
-                {
-                    // Only report if the service is install, otherwise do nothing
-                    Console.WriteLine("---------------------------------");
-                    Console.WriteLine("{0} is also installed as a service", appName);
-                    Console.WriteLine("---------------------------------");                    
-                }
-            }
-            catch (Exception e)
-            {
-                // do nothing
-            }
-        }
-        //--------------------------------------------------------------------
-
+        
         /// <summary>
         /// Display Console Usage
         /// </summary>
@@ -334,6 +220,8 @@ namespace ThingSharp.ThingSharp
                 "                         already installed as a service, this command\n" +
                 "                         will update the service command line arguments.\n" +
                 "          uninstall-----Stops and Uninstalls the service.\n\n" +
+                "          secure--------Opens the TCP connection with HTTPS security." +
+                "                        NOTE: Requires a Security Certificate to being installed." +
                 "        Options:\n" +
                 "          ip:<address>--Manually set the IP address used to communicate on the\n" +
                 "                         desired network.\n" +

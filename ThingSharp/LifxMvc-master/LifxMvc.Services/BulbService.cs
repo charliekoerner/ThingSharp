@@ -12,15 +12,12 @@ namespace LifxMvc.Services
 
     public class BulbLock
     {
-        const int LOCK_TIMEOUT = 7000;
+        const int LOCK_TIMEOUT = 1000;
 
         public bool Lock(IBulb b)
         {
-            DateTime startTime = DateTime.UtcNow; 
-            bool locked = Monitor.TryEnter(b, LOCK_TIMEOUT);             
-            return locked;  
+            return Monitor.TryEnter(b, LOCK_TIMEOUT);
         }
-
         public void Unlock(IBulb b)
         {
             Monitor.Exit(b);
@@ -156,9 +153,11 @@ namespace LifxMvc.Services
             return isSuccess;
 		}
         //--------------------------------------------------------------------
-
+                
         public bool LightGet(IBulb bulb, bool forceUpdate = false)
         {
+            if (bulb.isOffline) return false;
+
             try
             {
                 // If we're just going to use the cached values and not
@@ -185,6 +184,8 @@ namespace LifxMvc.Services
         
         public bool DeviceGetVersion(IBulb bulb)
 		{
+            if (bulb.isOffline) return false; 
+            
             bool isSuccess = false;
 
 			var packet = new DeviceGetVersionPacket(bulb);
@@ -200,7 +201,8 @@ namespace LifxMvc.Services
         //--------------------------------------------------------------------
         
         public bool? LightGetPower(IBulb bulb)
-        {            
+        {
+            if (bulb.isOffline) return null; 
             if (!UseCachedBulbPower(bulb))
             {  
                 var packet = new LightGetPowerPacket(bulb);
@@ -213,8 +215,8 @@ namespace LifxMvc.Services
 
         public bool LightSetPower(IBulb bulb, bool power)
         {
+            if (bulb.isOffline) return false; 
             bool isSuccess = false;
-
             try
             {
                 var packet = new LightSetPowerPacket(bulb, power);
@@ -236,6 +238,8 @@ namespace LifxMvc.Services
         
         public String LightGetColor(IBulb bulb)
         {
+            if (bulb.isOffline) return null; 
+
             // Get the latest Bulb HSBK settings 
             LightGet(bulb);
             string colorString = String.Format("{0:X2}{1:X2}{2:X2}{3:X2}", bulb.Color.A, bulb.Color.R, bulb.Color.G, bulb.Color.B);
@@ -245,8 +249,8 @@ namespace LifxMvc.Services
 
         public bool LightSetColor(IBulb bulb, Color color)
         {
+            if (bulb.isOffline) return false; 
             bool isSuccess = false;
-
             try
             {
                 // Get the latest Bulb HSBK settings (could have change from another source)
@@ -274,6 +278,8 @@ namespace LifxMvc.Services
 
         public ushort? LightGetBrightness(IBulb bulb)
         {
+            if (bulb.isOffline) return null; 
+
             // Get the latest Bulb HSBK settings (could have change from another source)
             this.LightGet(bulb);
             return bulb.isOffline ? null : (ushort?)bulb.Brightness;
@@ -282,8 +288,8 @@ namespace LifxMvc.Services
 
         public bool LightSetBrightness(IBulb bulb, ushort brightness)
         {
+            if (bulb.isOffline) return false; 
             bool isSuccess = false;
-
             try
             {
                 // Get the latest Bulb HSBK settings (could have change from another source)
@@ -306,6 +312,8 @@ namespace LifxMvc.Services
 
         public ushort? LightGetSaturation(IBulb bulb)
         {
+            if (bulb.isOffline) return null; 
+
             // Get the latest Bulb HSBK settings (could have change from another source)
             this.LightGet(bulb);
             return bulb.isOffline ? null : (ushort?)bulb.Saturation;
@@ -314,8 +322,8 @@ namespace LifxMvc.Services
 
         public bool LightSetSaturation(IBulb bulb, ushort saturation)
         {
+            if (bulb.isOffline) return false; 
             bool isSuccess = false;
-
             try
             {
                 // Get the latest Bulb HSBK settings (could have change from another source)
@@ -338,6 +346,8 @@ namespace LifxMvc.Services
 
         public ushort? LightGetKelvin(IBulb bulb)
         {
+            if (bulb.isOffline) return null; 
+
             // Get the latest Bulb HSBK settings (could have change from another source)
             this.LightGet(bulb);
             return bulb.isOffline ? null : (ushort?)bulb.Kelvin;
@@ -346,8 +356,8 @@ namespace LifxMvc.Services
 
         public bool LightSetKelvin(IBulb bulb, ushort kelvin)
         {
+            if (bulb.isOffline) return false; 
             bool isSuccess = false;
-
             try
             {
                 // Get the latest Bulb HSBK settings (could have change from another source)

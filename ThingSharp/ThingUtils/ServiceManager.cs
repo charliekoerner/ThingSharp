@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Runtime.InteropServices;
+using System.Reflection;
 
 
 namespace ThingSharp.Utils
@@ -146,7 +147,7 @@ namespace ThingSharp.Utils
         private static extern int StartService(IntPtr hService, int dwNumServiceArgs, int lpServiceArgVectors);
         #endregion
 
-        public void Uninstall(string serviceName)
+        private void Uninstall(string serviceName)
         {
             IntPtr scm = OpenSCManager(ScmAccessRights.AllAccess);
 
@@ -173,7 +174,7 @@ namespace ThingSharp.Utils
             }
         }
 
-        public bool ServiceIsInstalled(string serviceName)
+        private bool ServiceIsInstalled(string serviceName)
         {
             IntPtr scm = OpenSCManager(ScmAccessRights.Connect);
 
@@ -202,7 +203,7 @@ namespace ThingSharp.Utils
             return scm;
         }
 
-        public void Install(string serviceName, string displayName, string fileName)
+        private void Install(string serviceName, string displayName, string fileName)
         {
             IntPtr scm = OpenSCManager(ScmAccessRights.AllAccess);
 
@@ -224,7 +225,7 @@ namespace ThingSharp.Utils
             }
         }
 
-        public void Update(string serviceName, string displayName, string fileName)
+        private void Update(string serviceName, string displayName, string fileName)
         {
             IntPtr scm = OpenSCManager(ScmAccessRights.AllAccess);
 
@@ -251,7 +252,7 @@ namespace ThingSharp.Utils
             }
         }
 
-        public void StartService(string serviceName)
+        private void StartService(string serviceName)
         {
             IntPtr scm = OpenSCManager(ScmAccessRights.Connect);
 
@@ -276,7 +277,7 @@ namespace ThingSharp.Utils
             }
         }
 
-        public void StopService(string serviceName)
+        private void StopService(string serviceName)
         {
             IntPtr scm = OpenSCManager(ScmAccessRights.Connect);
 
@@ -319,7 +320,7 @@ namespace ThingSharp.Utils
                 throw new ApplicationException("Unable to stop service");
         }
 
-        public ServiceState GetServiceStatus(string serviceName)
+        private ServiceState GetServiceStatus(string serviceName)
         {
             IntPtr scm = OpenSCManager(ScmAccessRights.Connect);
 
@@ -399,5 +400,131 @@ namespace ThingSharp.Utils
             }
             return (status.dwCurrentState == desiredStatus);
         }
+
+
+
+
+
+        /// <summary>
+        /// Checks if launched as a Service or Console App
+        /// </summary>
+        public bool IsService(string serviceName)
+        {
+            bool isService = false;
+
+            try
+            {
+                //string title = Console.Title;
+                Console.Title = serviceName;
+            }
+            catch (Exception e)
+            {
+                isService = true;
+            }
+
+            return isService;
+        }
+        //--------------------------------------------------------------------
+
+        /// <summary>
+        /// Installs the application as a service
+        /// </summary>
+        public void InstallService(ArgParser args)
+        {
+            // Since this is running as a Console App and we got the service flag, then
+            // we need to install the exe as a service (if not already) and
+            // start the service. Since the service will be running, we can let this
+            // instance of the executable end.
+
+            try
+            {
+                string myExeDir = System.IO.Path.GetFullPath(Assembly.GetExecutingAssembly().Location);
+                string serviceName = Assembly.GetExecutingAssembly().GetName().Name;
+
+                //ServiceManager SvcMgr = new ServiceManager();
+
+                // Check if service is installed
+                if (ServiceIsInstalled(serviceName))
+                {
+                    // Update the service
+                    //SvcMgr.Update(serviceName, serviceName, myExeDir + String.Format(" {0} {1}", _Args.getValue("-ip"), _Args.getValue("-port")));
+                    Uninstall(serviceName);
+                    Install(serviceName, serviceName, myExeDir + String.Format(" {0} {1}", args.getArg("-ip"), args.getArg("-port")));
+                    Console.WriteLine("The service [{0}] was updated successfully", serviceName);
+                }
+                else
+                {
+                    // Install the service                        
+                    Install(serviceName, serviceName, myExeDir + String.Format(" {0} {1}", args.getArg("-ip"), args.getArg("-port")));
+                    Console.WriteLine("The service [{0}] was installed successfully", serviceName);
+                }
+
+                // Start the Service
+                StartService(serviceName);
+                Console.WriteLine("The service [{0}] started successfully", serviceName);
+
+                //Console.WriteLine("The following command line arguments were passed in: \n{0}", string.Join("\n", args));
+                Console.WriteLine("\nPress any key to close...");
+                Console.ReadKey(true);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.ToString());
+                Console.WriteLine("Press any key to close...");
+                Console.ReadKey(true);
+            }
+        }
+        //--------------------------------------------------------------------
+
+        /// <summary>
+        /// Uninstalls the service
+        /// </summary>
+        public void UninstallService()
+        {
+            try
+            {
+                string myExeDir = System.IO.Path.GetFullPath(Assembly.GetExecutingAssembly().Location);
+                string serviceName = Assembly.GetExecutingAssembly().GetName().Name;               
+
+                Uninstall(serviceName);
+
+                Console.WriteLine("The service [{0}] was Uninstalled successfully", serviceName);
+                Console.WriteLine("Press any key to close...");
+                Console.ReadKey(true);
+
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Error: Could not uninstall service");
+                Console.WriteLine(e.ToString());
+                Console.WriteLine("Press any key to close...");
+                Console.ReadKey(true);
+            }
+        }
+        //--------------------------------------------------------------------
+
+        /// <summary>
+        /// Report is service is installed
+        /// </summary>
+        public void CheckIfServiceIsInstalled(string appName)
+        {
+            try
+            {
+                if (ServiceIsInstalled(appName))
+                {
+                    // Only report if the service is install, otherwise do nothing
+                    Console.WriteLine("---------------------------------");
+                    Console.WriteLine("{0} is also installed as a service", appName);
+                    Console.WriteLine("---------------------------------");
+                }
+            }
+            catch (Exception e)
+            {
+                // do nothing
+            }
+        }
+        //--------------------------------------------------------------------
+
+
     }
 }
